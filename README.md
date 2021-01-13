@@ -1,6 +1,6 @@
 # Rust driver for MAX31856
 
-Uses [`embedded-hal`] (https://github.com/rust-embedded/embedded-hal) traits and patterns from Eldruin's [`driver-examples`](https://github.com/eldruin/driver-examples)
+Uses [`embedded-hal`](https://github.com/rust-embedded/embedded-hal) traits and patterns from Eldruin's [`driver-examples`](https://github.com/eldruin/driver-examples)
 
 Features:
 - Modify default configuration. see `config()`
