@@ -5,6 +5,7 @@ authors = ["dheepan <idheepan@gmail.com>"]
 repository = "https://github.com/idheepan/max31856-rs"
 edition = "2018"
 license = "MIT OR Apache-2.0"
+description = "A platform independent rust driver for Max31856 Precision Thermocouple to Digital Converter"
 readme = "README.md"
 keywords = ["temperature", "thermocouple", "sensor", "embedded-hal-driver"]
 categories = ["embedded", "hardware-support", "no-std"]
