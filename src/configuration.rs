@@ -1,3 +1,48 @@
+pub(crate) enum FaultBits{
+}
+impl FaultBits {
+    pub const CJ_RANGE:u8 = 1 << 7;
+    pub const TC_RANGE:u8 = 1 << 6;
+    pub const CJ_HIGH:u8 = 1 << 5;
+    pub const CJ_LOW:u8 = 1 << 4;
+    pub const TC_HIGH:u8 = 1 << 3;
+    pub const TC_LOW:u8 = 1 << 2;
+    pub const OVUV:u8 = 1 << 1;
+    pub const OPEN:u8 = 1 << 0;
+}
+
+/// Errors reported by the device.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct DeviceErrors {
+    /// The Cold-Junction temperature is outside of the normal operating range.
+    pub cold_junction_out_of_range: bool,
+    /// The Thermocouple Hot Junction temperature is outside of the normal operating range.
+    /// Note: The TC Range bit should be ignored in voltage mode.
+    pub thermocouple_out_of_range: bool,
+    /// The Cold-Junction temperature is higher than the cold-junction 
+    /// temperature high threshold. The FAULT output is asserted unless masked.
+    pub cold_junction_high: bool,
+    /// The Cold-Junction temperature is lower than the cold-junction 
+    /// temperature low threshold. The FAULT output is asserted unless masked.
+    pub cold_junction_low: bool,
+    /// The Thermocouple Temperature is higher than the thermocouple 
+    /// temperature high threshold. The FAULT output is asserted unless masked.
+    pub thermocouple_high: bool,
+    /// The Thermocouple Temperature is lower than the thermocouple 
+    /// temperature low threshold. The FAULT output is asserted unless masked.
+    pub thermocouple_low: bool,
+    /// The input voltage is negative or greater than VDD. 
+    /// The FAULT output is asserted unless masked.
+    /// Note: The presence of the OVUV fault will suspend conversions 
+    /// and the ability of the MAX31856 to detect other faults 
+    /// (or clear faults when in comparator mode) until the fault is no longer present. 
+    pub overvoltage_undervoltage: bool,
+    /// An open circuit such as broken thermocouple wires has been detected. 
+    /// The FAULT output is asserted unless masked.
+    pub open_circuit: bool,
+}
+
+
 /// Conversion mode
 #[derive(Debug, Clone, Copy)]
 pub enum CMode {

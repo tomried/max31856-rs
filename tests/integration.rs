@@ -5,7 +5,7 @@ use self::hal::spi::{Mock as SpiMock,
 use self::hal::pin::{Transaction as PinTransaction, 
     Mock as PinMock, 
     State as PinState};
-use self::max31856::Max31856;
+use self::max31856::{Max31856, Error};
 
 #[test]
 fn can_create_max31856_options() {
@@ -84,4 +84,37 @@ fn can_read_negative_temperature_normally_off() {
     let fault = PinMock::new(&pin_expectations);
     let mut sensor = Max31856::new(spi, cs, fault);
     assert_eq!(sensor.temperature().unwrap(), -87.171875);
+}
+
+#[test]
+fn can_get_fault_status(){
+        // SPI transactions
+        let spi_expectations = [
+            SpiTransaction::transfer(vec![0x0F, 0], vec![0x0F, 0x15]), //Write C1
+        ];
+        // Pin transactions
+        let pin_expectations = [
+            //Transfering data
+            PinTransaction::set(PinState::Low),
+            PinTransaction::set(PinState::High),
+        ];
+
+        let spi = SpiMock::new(&spi_expectations);
+        let cs = PinMock::new(&pin_expectations);
+        let fault = PinMock::new(&pin_expectations);
+        let mut sensor = Max31856::new(spi, cs, fault);
+        let result = sensor.fault_status();
+        match result {
+        Err(Error::Device(errors)) => {
+            assert_eq!(false, errors.cold_junction_out_of_range);
+            assert_eq!(false, errors.thermocouple_out_of_range);
+            assert_eq!(false, errors.cold_junction_high);
+            assert_eq!(true, errors.cold_junction_low);
+            assert_eq!(false, errors.thermocouple_high);
+            assert_eq!(true, errors.thermocouple_low);            
+            assert_eq!(false, errors.overvoltage_undervoltage);
+            assert_eq!(true, errors.open_circuit);
+        }
+        _ => panic!("Wrong result"),
+    }
 }

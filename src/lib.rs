@@ -49,6 +49,13 @@
 
 extern crate embedded_hal as hal;
 use hal::spi::{Mode, MODE_3};
+use configuration::{FaultBits};
+
+mod configuration;
+pub use configuration::{CMode, OneShot, OCFaultModes, FaultModes, DeviceErrors, 
+    NoiseRejectionMode, AveragingMode, ThermocoupleType, Max31856Options};
+mod registers;
+use registers::Registers;
 
 /// Errors in this crate
 #[derive(Debug)]
@@ -59,18 +66,10 @@ pub enum Error<CommE, PinE> {
     Pin(PinE),
     /// Invalid argument provided
     InvalidArgument,
-    /// Cold Junction High Fault Error
-    CJHighFaultError,
-    /// Cold Junction Low Fault Error
-    CJLowFaultError,
-    /// Thermocouple Temperature High Fault Error
-    TCHighFaultError,
-    /// Thermocouple Temperature Low Fault Error
-    TCLowFaultError,
-    /// Over-voltage or Undervoltage Input Fault Error
-    OVUVFaultError,
-    /// Thermocouple Open-circuit Fault Error
-    OpenCircuitFaultError,
+    /// Errors from the device. 
+    /// Can be more than one. If there is undervoltage or overvoltage, 
+    /// other errors are not detected. Fix that first. Use DeviceError
+    Device(DeviceErrors),
 }
 
 /// SPI mode (CPOL = 1, CPHA = 1)
@@ -122,11 +121,6 @@ where
     }
 }
 
-mod configuration;
-pub use configuration::{CMode, OneShot, OCFaultModes, FaultModes, 
-    NoiseRejectionMode, AveragingMode, ThermocoupleType, Max31856Options};
-mod registers;
-use registers::Registers;
 
 /// Max31856 Precision Thermocouple to Digital Converter with Linearization
 #[derive(Debug, Default)]
@@ -219,10 +213,53 @@ where
         Ok(sign * (value as f32)/1048576.0)
     }
 
-    /// Check if any of the faults are triggered especially 
-    /// Check for over/under voltage or open circuit fault
-    pub fn fault_status(&self) -> Result<(), DI::Error>{
-        todo!()
+    /// Check if any of the faults are triggered
+    pub fn fault_status(&mut self) -> Result<(), DI::Error>{
+        let mut buffer = [0u8; 2]; // One byte value from Fault status register
+        buffer[0] = Registers::SR.read_address;
+        self.iface.read(&mut buffer)?;
+        let error_id = buffer[1];
+        let mut has_error = false;
+        let mut errors =  DeviceErrors::default();
+
+        //If overvoltage or undervoltage, all other errors might not be set
+        if(error_id & FaultBits::OVUV) !=0 {
+            errors.overvoltage_undervoltage = true;
+            return Err(Error::Device(errors))
+        }
+        if(error_id & FaultBits::CJ_HIGH) !=0 {
+            errors.cold_junction_high = true;
+            has_error = true;
+        }
+        if(error_id & FaultBits::CJ_LOW) !=0 {
+            errors.cold_junction_low = true;
+            has_error = true;
+        }
+        if(error_id & FaultBits::CJ_RANGE) !=0 {
+            errors.cold_junction_out_of_range = true;
+            has_error = true;
+        }
+        if(error_id & FaultBits::OPEN) !=0 {
+            errors.open_circuit = true;
+            has_error = true;
+        }
+        if(error_id & FaultBits::TC_HIGH) !=0 {
+            errors.thermocouple_high = true;
+            has_error = true;
+        }
+        if(error_id & FaultBits::TC_LOW) !=0 {
+            errors.thermocouple_low = true;
+            has_error = true;
+        }
+        if(error_id & FaultBits::TC_RANGE) !=0 {
+            errors.thermocouple_out_of_range = true;
+            has_error = true;
+        }
+        if has_error {            
+            Err(Error::Device(errors))
+        } else {
+            Ok(())
+        }
     }
 }
 
