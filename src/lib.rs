@@ -49,7 +49,7 @@
 
 extern crate embedded_hal as hal;
 use hal::spi::{Mode, MODE_3};
-use configuration::{FaultBits};
+use configuration::FaultBits;
 
 mod configuration;
 pub use configuration::{CMode, OneShot, OCFaultModes, FaultModes, DeviceErrors, 
@@ -59,11 +59,11 @@ use registers::Registers;
 
 /// Errors in this crate
 #[derive(Debug)]
-pub enum Error<CommE, PinE> {
+pub enum Error {
     /// SPI communication error
-    Spi(CommE),
+    Spi,
     /// Pin setting error
-    Pin(PinE),
+    Pin,
     /// Invalid argument provided
     InvalidArgument,
     /// Errors from the device. 
@@ -75,93 +75,43 @@ pub enum Error<CommE, PinE> {
 /// SPI mode (CPOL = 1, CPHA = 1)
 pub const MODE: Mode = MODE_3; // See Table 5. Serial Interface Function
 
-/// SPI interface
-#[doc(hidden)]
-#[derive(Debug, Default)]
-pub struct SpiInterface<SPI, CS> {
-    pub spi: SPI,
-    pub cs: CS,
-}
-
-/// write interface trait
-#[doc(hidden)]
-pub trait SpiTransfer {
-    type Error;
-    fn write(&mut self, address: u8, word: u8) -> Result<(), Self::Error>;
-    fn read(&mut self, payload: &mut [u8]) -> Result<(), Self::Error>;
-}
-
-impl<SPI, CS, CommE, PinE> SpiTransfer for SpiInterface<SPI, CS>
-where 
-    SPI: hal::blocking::spi::Transfer<u8, Error=CommE>
-        +  hal::blocking::spi::Write<u8, Error=CommE>,
-    CS: hal::digital::v2::OutputPin<Error = PinE>,
-{
-    type Error = Error<CommE, PinE>;
-    /// Write one byte to SPI. 
-    fn write(&mut self, address:u8, word: u8) -> Result<(), Self::Error>{
-        self.cs.set_low().map_err(Error::Pin)?;
-        let result = self
-            .spi
-            .write(&[address, word])
-            .map_err(Error::Spi);
-        self.cs.set_high().map_err(Error::Pin)?;
-        result
-    }
-
-    /// Read from the first address specified in the first byte of buffer.
-    /// The buffer size should be equal to reply + 1 bytes
-    fn read(&mut self, buffer:&mut [u8]) -> Result<(), Self::Error>{
-        self.cs.set_low().map_err(Error::Pin)?;
-        self.spi
-            .transfer(buffer)
-            .map_err(Error::Spi)?;
-        self.cs.set_high().map_err(Error::Pin)?;
-        Ok(())
-    }
-}
-
 
 /// Max31856 Precision Thermocouple to Digital Converter with Linearization
 #[derive(Debug, Default)]
-pub struct Max31856<I, FP> {
-    iface: I,
+pub struct Max31856<SPI, FP> {
+    spi: SPI,
     fault: FP,
     config: Max31856Options
 }
 
-impl<SPI, CS, FP> Max31856<SpiInterface<SPI, CS>, FP> {
+impl<SPI, FP> Max31856<SPI, FP>
+where
+    SPI: embedded_hal::spi::SpiDevice,
+    FP: hal::digital::InputPin,
+{
     /// Create a new instance of Max31856
-    pub fn new(spi: SPI, chip_select: CS, fault_pin: FP) -> Self {
+    pub fn new(spi: SPI, fault_pin: FP) -> Self {
         Max31856 {
-            iface: SpiInterface {
-                spi,
-                cs: chip_select,
-            },
+            spi,
             fault: fault_pin,
             config: Max31856Options::default(),
         }
     }
-}
-
-impl<CommE, PinE, DI, FP> Max31856<DI, FP>
-where
-    DI: SpiTransfer<Error = Error<CommE, PinE>>,
-    FP: hal::digital::v2::InputPin,
-{
 
     /// Parse options and write to C0 and C1 registers. 
-    pub fn send_config(&mut self) -> Result<(), DI::Error> {
+    pub fn send_config(&mut self) -> Result<(), Error> {
         self.send_c0()?;
         self.send_c1()
     }
 
-    fn send_c0(&mut self) -> Result<(), DI::Error> {
-        self.iface.write(Registers::CR0.write_address, self.config.extract_c0())
+    fn send_c0(&mut self) -> Result<(), Error> {
+        self.spi.write(&[Registers::CR0.write_address, self.config.extract_c0()])
+        .map_err(|_| Error::Spi)
     }
 
-    fn send_c1(&mut self) -> Result<(), DI::Error> {
-        self.iface.write(Registers::CR1.write_address, self.config.extract_c1())
+    fn send_c1(&mut self) -> Result<(), Error> {
+        self.spi.write(&[Registers::CR1.write_address, self.config.extract_c1()])
+        .map_err(|_| Error::Spi)
     }
 
     /// Get a reference of stored configuration. This can be then used to modify certain
@@ -179,13 +129,13 @@ where
 
     /// Get the measured value of cold-junction temperature 
     /// plus the value in the Cold-Junction Offset register
-    pub fn cold_junction_temperature(&mut self) -> Result<f32, DI::Error> {
+    pub fn cold_junction_temperature(&mut self) -> Result<f32, Error> {
         todo!()
     }
 
     /// Get the linearized and cold-junction-compensated thermocouple
     /// temperature value.
-    pub fn temperature(&mut self) -> Result<f32, DI::Error>{
+    pub fn temperature(&mut self) -> Result<f32, Error>{
         //If conversion mode is normally off, a one-time conversion should be done.
         //The one shot conversion takes about 150ms and then the bit is reset.
         //On automatic conversion mode, the temperature can requested without 1-shot trigger
@@ -201,7 +151,7 @@ where
 
         let mut buffer = [0u8; 4]; // Three bytes of temperature data
         buffer[0] = Registers::LTCBH.read_address;
-        self.iface.read(&mut buffer)?;
+        self.spi.transfer_in_place(&mut buffer).map_err(|_| Error::Spi)?;
         // TODO Check if any of the faults are triggered especially 
         // Check for over/under voltage or open circuit fault
 
@@ -214,10 +164,10 @@ where
     }
 
     /// Check if any of the faults are triggered
-    pub fn fault_status(&mut self) -> Result<(), DI::Error>{
+    pub fn fault_status(&mut self) -> Result<(), Error>{
         let mut buffer = [0u8; 2]; // One byte value from Fault status register
         buffer[0] = Registers::SR.read_address;
-        self.iface.read(&mut buffer)?;
+        self.spi.transfer_in_place(&mut buffer).map_err(|_| Error::Spi)?;
         let error_id = buffer[1];
         let mut has_error = false;
         let mut errors =  DeviceErrors::default();
