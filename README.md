@@ -8,6 +8,7 @@ Features:
 - Modify default configuration. See: `config()`
 - Read/write configuration. See: `send_config()`
 - Read Linearized thermocouple temperature in Celcius. See: `temperature()`
+- Read cold junction temperature. See: `cold_junction_temperature()`
 - Read Fault status. See: `fault_status()`
 
 Features in the next few versions:
@@ -17,7 +18,6 @@ Features in the next few versions:
 - Read/write cold junction fault mask registers.
 - Read/write Linearized temperature fault registers.
 - Read/write cold junction temperature offset registers. 
-- Read cold junction temperature. 
 
 ## Usage example
 ```rust

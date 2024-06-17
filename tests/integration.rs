@@ -103,3 +103,71 @@ fn can_get_fault_status(){
     spi.done();
     fault.done();
 }
+
+#[test]
+fn can_read_cold_junction_temperature() {
+    // SPI transactions
+    let spi_expectations = [
+        //Read cj temperature register with a value of 127.984375
+        SpiTransaction::transaction_start(),
+        SpiTransaction::transfer_in_place(vec![0x0A, 0,0], vec![0x0A, 0x7F, 0xFC]),
+        SpiTransaction::transaction_end(),
+        //Read cj temperature register with a value of 127
+        SpiTransaction::transaction_start(),
+        SpiTransaction::transfer_in_place(vec![0x0A, 0,0], vec![0x0A, 0x7F, 0x00]),
+        SpiTransaction::transaction_end(),
+        //Read cj temperature register with a value of 125
+        SpiTransaction::transaction_start(),
+        SpiTransaction::transfer_in_place(vec![0x0A, 0,0], vec![0x0A, 0x7D, 0x00]),
+        SpiTransaction::transaction_end(),
+        //Read cj temperature register with a value of 64
+        SpiTransaction::transaction_start(),
+        SpiTransaction::transfer_in_place(vec![0x0A, 0,0], vec![0x0A, 0x40, 0x00]),
+        SpiTransaction::transaction_end(),
+        //Read cj temperature register with a value of 25
+        SpiTransaction::transaction_start(),
+        SpiTransaction::transfer_in_place(vec![0x0A, 0,0], vec![0x0A, 0x19, 0x00]),
+        SpiTransaction::transaction_end(),
+        //Read cj temperature register with a value of 0.5
+        SpiTransaction::transaction_start(),
+        SpiTransaction::transfer_in_place(vec![0x0A, 0,0], vec![0x0A, 0x00, 0x80]),
+        SpiTransaction::transaction_end(),
+        //Read cj temperature register with a value of 0.015625
+        SpiTransaction::transaction_start(),
+        SpiTransaction::transfer_in_place(vec![0x0A, 0,0], vec![0x0A, 0x00, 0x04]),
+        SpiTransaction::transaction_end(),
+        //Read cj temperature register with a value of 0
+        SpiTransaction::transaction_start(),
+        SpiTransaction::transfer_in_place(vec![0x0A, 0,0], vec![0x0A, 0x00, 0x00]),
+        SpiTransaction::transaction_end(),
+        //Read cj temperature register with a value of -0.5
+        SpiTransaction::transaction_start(),
+        SpiTransaction::transfer_in_place(vec![0x0A, 0,0], vec![0x0A, 0xFF, 0x80]),
+        SpiTransaction::transaction_end(),
+        //Read cj temperature register with a value of -25
+        SpiTransaction::transaction_start(),
+        SpiTransaction::transfer_in_place(vec![0x0A, 0,0], vec![0x0A, 0xE7, 0x00]),
+        SpiTransaction::transaction_end(),
+        //Read cj temperature register with a value of -55
+        SpiTransaction::transaction_start(),
+        SpiTransaction::transfer_in_place(vec![0x0A, 0,0], vec![0x0A, 0xC9, 0x00]),
+        SpiTransaction::transaction_end(),
+    ];
+
+    let mut spi = SpiMock::new(&spi_expectations);
+    let mut fault = PinMock::new(&[]);
+    let mut sensor = Max31856::new(&mut spi, &mut fault);
+    assert_eq!(sensor.cold_junction_temperature().unwrap(), 127.984375);
+    assert_eq!(sensor.cold_junction_temperature().unwrap(), 127.0);
+    assert_eq!(sensor.cold_junction_temperature().unwrap(), 125.0);
+    assert_eq!(sensor.cold_junction_temperature().unwrap(),  64.0);
+    assert_eq!(sensor.cold_junction_temperature().unwrap(),  25.0);
+    assert_eq!(sensor.cold_junction_temperature().unwrap(),   0.5);
+    assert_eq!(sensor.cold_junction_temperature().unwrap(),   0.015625);
+    assert_eq!(sensor.cold_junction_temperature().unwrap(),   0.0);
+    assert_eq!(sensor.cold_junction_temperature().unwrap(),  -0.5);
+    assert_eq!(sensor.cold_junction_temperature().unwrap(), -25.0);
+    assert_eq!(sensor.cold_junction_temperature().unwrap(), -55.0);
+    spi.done();
+    fault.done();
+}

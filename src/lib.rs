@@ -11,11 +11,13 @@
 //! - Modify default configuration. See: [`config()`]
 //! - Read/write configuration. See: [`send_config()`]
 //! - Read Linearized thermocouple temperature in Celcius. See: [`temperature()`]
+//! - Read cold junction temperature. See: [`cold_junction_temperature()`]
 //! - Read Fault status. See: [`fault_status()`]
 //!
 //! [`config()`]: struct.Max31856.html#method.config
 //! [`send_config()`]: struct.Max31856.html#method.send_config
 //! [`temperature()`]: struct.Max31856.html#method.temperature
+//! [`cold_junction_temperature()`]: struct.Max31856.html#method.cold_junction_temperature
 //! [`fault_status()`]: struct.Max31856.html#method.fault_status
 //!
 //! Features in the next few versions:
@@ -25,7 +27,6 @@
 //! - Read/write cold junction fault mask registers.
 //! - Read/write Linearized temperature fault registers.
 //! - Read/write cold junction temperature offset registers. 
-//! - Read cold junction temperature. 
 //! 
 //! ## Usage example
 //! ```
@@ -138,7 +139,12 @@ where
     /// Get the measured value of cold-junction temperature 
     /// plus the value in the Cold-Junction Offset register
     pub fn cold_junction_temperature(&mut self) -> Result<f32, Error> {
-        todo!()
+        let mut buffer = [0u8; 3]; // Two bytes of temperature data
+        buffer[0] = Registers::CJTH.read_address;
+        self.spi.transfer_in_place(&mut buffer).map_err(|_| Error::Spi)?;
+        let mut value: i16 = (buffer[1] as i16) << 8;
+        value += buffer[2] as i16;
+        Ok(value as f32 / 256.0)
     }
 
     /// Get the linearized and cold-junction-compensated thermocouple
