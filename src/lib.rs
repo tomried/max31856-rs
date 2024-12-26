@@ -157,18 +157,24 @@ where
             _ => {}
         } 
 
-        let mut buffer = [0u8; 4]; // Three bytes of temperature data
+        let mut buffer = [0u8; 4]; // One byte address, three bytes of temperature data
         buffer[0] = Registers::LTCBH.read_address;
         self.spi.transfer_in_place(&mut buffer).map_err(|_| Error::Spi)?;
         // TODO Check if any of the faults are triggered especially 
         // Check for over/under voltage or open circuit fault
 
-        // The three bits are rearranged to derive the temperature
-        let sign = if buffer[1] & 0x80 == 0x80 {-1.0} else {1.0};
-        let mut value = ((buffer[1] & 0x7F) as i32) << 24;
-        value += (buffer[2] as i32) << 16;
-        value += (buffer[3] as i32) << 8;
-        Ok(sign * (value as f32)/1048576.0)
+        // move bytes into int
+        let mut value: i32 = (buffer[1] as i32) << 16;
+        value += (buffer[2] as i32) << 8;
+        value += buffer[3] as i32;
+        // fill extra bits with msb for twos-complement representation with larger int
+        if buffer[1] & 0x80 == 0x80 {
+            value += 0xFF_i32 << 24;
+        }
+        // shift out least significant 5 bits because they are not used
+        value >>= 5;
+        // multiply by measurement accuracy
+        Ok(value as f32 * 0.0078125)
     }
 
     /// Check if any of the faults are triggered
